@@ -304,7 +304,7 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
             val action = intent.action
             if (UsbManager.ACTION_USB_DEVICE_DETACHED == action) {
                 val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
-                if (device != null && device.deviceId == usbDevice?.deviceId) {
+                if (device?.vendorId == usbDevice?.vendorId && device?.productId == usbDevice?.productId) {
                     usbDeviceConnection?.close()
                     usbDeviceConnection = null
                     usbDevice = null

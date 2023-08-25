@@ -54,6 +54,7 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        applicationContext?.unregisterReceiver(usbDetachReceiver)
         channel.setMethodCallHandler(null)
         usbManager = null
         applicationContext = null

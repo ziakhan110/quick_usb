@@ -1,10 +1,9 @@
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart' as ffi;
 import 'package:flutter/foundation.dart';
-import 'package:libusb/libusb64.dart';
+import 'package:libusb/libusb.dart';
 import 'package:quick_usb/src/common.dart';
 
 import 'quick_usb_platform_interface.dart';
@@ -36,7 +35,8 @@ class QuickUsbLinux extends _QuickUsbDesktop {
   // For example/.dart_tool/flutter_build/generated_main.dart
   static registerWith() {
     QuickUsbPlatform.instance = QuickUsbLinux();
-    _libusb = Libusb(DynamicLibrary.open('${File(Platform.resolvedExecutable).parent.path}/lib/libusb-1.0.23.so'));
+    _libusb = Libusb(DynamicLibrary.open(
+        '${File(Platform.resolvedExecutable).parent.path}/lib/libusb-1.0.23.so'));
   }
 }
 
@@ -71,13 +71,15 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
     }
   }
 
-  Iterable<UsbDevice> _iterateDevice(Pointer<Pointer<libusb_device>> deviceList) sync* {
+  Iterable<UsbDevice> _iterateDevice(
+      Pointer<Pointer<libusb_device>> deviceList) sync* {
     var descPtr = ffi.calloc<libusb_device_descriptor>();
 
     for (var i = 0; deviceList[i] != nullptr; i++) {
       var dev = deviceList[i];
       var addr = _libusb.libusb_get_device_address(dev);
-      var getDesc = _libusb.libusb_get_device_descriptor(dev, descPtr) == libusb_error.LIBUSB_SUCCESS;
+      var getDesc = _libusb.libusb_get_device_descriptor(dev, descPtr) ==
+          libusb_error.LIBUSB_SUCCESS;
 
       yield UsbDevice(
         identifier: addr.toString(),
@@ -91,7 +93,8 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
   }
 
   @override
-  Future<List<UsbDeviceDescription>> getDevicesWithDescription({bool requestPermission = true}) async {
+  Future<List<UsbDeviceDescription>> getDevicesWithDescription(
+      {bool requestPermission = true}) async {
     var devices = await getDeviceList();
     var result = <UsbDeviceDescription>[];
     for (var device in devices) {
@@ -101,26 +104,31 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
   }
 
   @override
-  Future<UsbDeviceDescription> getDeviceDescription(UsbDevice usbDevice, {bool requestPermission = true}) async {
+  Future<UsbDeviceDescription> getDeviceDescription(UsbDevice usbDevice,
+      {bool requestPermission = true}) async {
     String? manufacturer;
     String? product;
     String? serialNumber;
     var descPtr = ffi.calloc<libusb_device_descriptor>();
     try {
-      var handle = _libusb.libusb_open_device_with_vid_pid(nullptr, usbDevice.vendorId, usbDevice.productId);
+      var handle = _libusb.libusb_open_device_with_vid_pid(
+          nullptr, usbDevice.vendorId, usbDevice.productId);
       if (handle != nullptr) {
         var device = _libusb.libusb_get_device(handle);
         if (device != nullptr) {
-          var getDesc = _libusb.libusb_get_device_descriptor(device, descPtr) == libusb_error.LIBUSB_SUCCESS;
+          var getDesc = _libusb.libusb_get_device_descriptor(device, descPtr) ==
+              libusb_error.LIBUSB_SUCCESS;
           if (getDesc) {
             if (descPtr.ref.iManufacturer > 0) {
-              manufacturer = _getStringDescriptorASCII(handle, descPtr.ref.iManufacturer);
+              manufacturer =
+                  _getStringDescriptorASCII(handle, descPtr.ref.iManufacturer);
             }
             if (descPtr.ref.iProduct > 0) {
               product = _getStringDescriptorASCII(handle, descPtr.ref.iProduct);
             }
             if (descPtr.ref.iSerialNumber > 0) {
-              serialNumber = _getStringDescriptorASCII(handle, descPtr.ref.iSerialNumber);
+              serialNumber =
+                  _getStringDescriptorASCII(handle, descPtr.ref.iSerialNumber);
             }
           }
         }
@@ -130,14 +138,19 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
       ffi.calloc.free(descPtr);
     }
     return UsbDeviceDescription(
-        device: usbDevice, manufacturer: manufacturer, product: product, serialNumber: serialNumber);
+        device: usbDevice,
+        manufacturer: manufacturer,
+        product: product,
+        serialNumber: serialNumber);
   }
 
-  String? _getStringDescriptorASCII(Pointer<libusb_device_handle> handle, int descIndex) {
+  String? _getStringDescriptorASCII(
+      Pointer<libusb_device_handle> handle, int descIndex) {
     String? result;
     Pointer<ffi.Utf8> string = ffi.calloc<Uint8>(256).cast();
     try {
-      var ret = _libusb.libusb_get_string_descriptor_ascii(handle, descIndex, string.cast(), 256);
+      var ret = _libusb.libusb_get_string_descriptor_ascii(
+          handle, descIndex, string.cast(), 256);
       if (ret > 0) {
         result = string.toDartString();
       }
@@ -161,7 +174,8 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
   Future<bool> openDevice(UsbDevice usbDevice) async {
     assert(_devHandle == null, 'Last device not closed');
 
-    var handle = _libusb.libusb_open_device_with_vid_pid(nullptr, usbDevice.vendorId, usbDevice.productId);
+    var handle = _libusb.libusb_open_device_with_vid_pid(
+        nullptr, usbDevice.vendorId, usbDevice.productId);
     if (handle == nullptr) {
       return false;
     }
@@ -184,7 +198,8 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
     var configDescPtrPtr = ffi.calloc<Pointer<libusb_config_descriptor>>();
     try {
       var device = _libusb.libusb_get_device(_devHandle!);
-      var getConfigDesc = _libusb.libusb_get_config_descriptor(device, index, configDescPtrPtr);
+      var getConfigDesc =
+          _libusb.libusb_get_config_descriptor(device, index, configDescPtrPtr);
       if (getConfigDesc != libusb_error.LIBUSB_SUCCESS) {
         throw 'getConfigDesc error: ${_libusb.describeError(getConfigDesc)}';
       }
@@ -193,7 +208,9 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
       var usbConfiguration = UsbConfiguration(
         id: configDescPtr.ref.bConfigurationValue,
         index: configDescPtr.ref.iConfiguration,
-        interfaces: _iterateInterface(configDescPtr.ref.interface_1, configDescPtr.ref.bNumInterfaces).toList(),
+        interfaces: _iterateInterface(
+                configDescPtr.ref.interface1, configDescPtr.ref.bNumInterfaces)
+            .toList(),
       );
       _libusb.libusb_free_config_descriptor(configDescPtr);
 
@@ -203,7 +220,8 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
     }
   }
 
-  Iterable<UsbInterface> _iterateInterface(Pointer<libusb_interface> interfacePtr, int interfaceCount) sync* {
+  Iterable<UsbInterface> _iterateInterface(
+      Pointer<libusb_interface> interfacePtr, int interfaceCount) sync* {
     for (var i = 0; i < interfaceCount; i++) {
       var interface = interfacePtr[i];
       for (var j = 0; j < interface.num_altsetting; j++) {
@@ -211,13 +229,16 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
         yield UsbInterface(
           id: intfDesc.bInterfaceNumber,
           alternateSetting: intfDesc.bAlternateSetting,
-          endpoints: _iterateEndpoint(intfDesc.endpoint, intfDesc.bNumEndpoints).toList(),
+          endpoints: _iterateEndpoint(intfDesc.endpoint, intfDesc.bNumEndpoints)
+              .toList(),
         );
       }
     }
   }
 
-  Iterable<UsbEndpoint> _iterateEndpoint(Pointer<libusb_endpoint_descriptor> endpointDescPtr, int endpointCount) sync* {
+  Iterable<UsbEndpoint> _iterateEndpoint(
+      Pointer<libusb_endpoint_descriptor> endpointDescPtr,
+      int endpointCount) sync* {
     for (var i = 0; i < endpointCount; i++) {
       var endpointDesc = endpointDescPtr[i];
       yield UsbEndpoint(
@@ -264,12 +285,14 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
   }
 
   @override
-  Future<Uint8List> bulkTransferIn(UsbEndpoint endpoint, int maxLength, int timeout) async {
+  Future<Uint8List> bulkTransferIn(
+      UsbEndpoint endpoint, int maxLength, int timeout) async {
     assert(_devHandle != null, 'Device not open');
-    assert(endpoint.direction == UsbEndpoint.DIRECTION_IN, 'Endpoint\'s direction should be in');
+    assert(endpoint.direction == UsbEndpoint.DIRECTION_IN,
+        'Endpoint\'s direction should be in');
 
-    var actualLengthPtr = ffi.calloc<Int32>();
-    var dataPtr = ffi.calloc<Uint8>(maxLength);
+    var actualLengthPtr = ffi.calloc<Int>();
+    var dataPtr = ffi.calloc<UnsignedChar>(maxLength);
     try {
       var result = _libusb.libusb_bulk_transfer(
         _devHandle!,
@@ -283,7 +306,11 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
       if (result != libusb_error.LIBUSB_SUCCESS) {
         throw 'bulkTransferIn error: ${_libusb.describeError(result)}';
       }
-      return Uint8List.fromList(dataPtr.asTypedList(actualLengthPtr.value));
+      final data = Uint8List(actualLengthPtr.value);
+      for (var i = 0; i < actualLengthPtr.value; i++) {
+        data[i] = dataPtr.elementAt(i).value;
+      }
+      return data;
     } finally {
       ffi.calloc.free(actualLengthPtr);
       ffi.calloc.free(dataPtr);
@@ -291,13 +318,17 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
   }
 
   @override
-  Future<int> bulkTransferOut(UsbEndpoint endpoint, Uint8List data, int timemout) async {
+  Future<int> bulkTransferOut(
+      UsbEndpoint endpoint, Uint8List data, int timemout) async {
     assert(_devHandle != null, 'Device not open');
-    assert(endpoint.direction == UsbEndpoint.DIRECTION_OUT, 'Endpoint\'s direction should be out');
+    assert(endpoint.direction == UsbEndpoint.DIRECTION_OUT,
+        'Endpoint\'s direction should be out');
 
-    var actualLengthPtr = ffi.calloc<Int32>();
-    var dataPtr = ffi.calloc<Uint8>(data.length);
-    dataPtr.asTypedList(data.length).setAll(0, data);
+    var actualLengthPtr = ffi.calloc<Int>();
+    var dataPtr = ffi.calloc<UnsignedChar>(data.length);
+    for (var i = 0; i < actualLengthPtr.value; i++) {
+      dataPtr[i] = data[i];
+    }
     try {
       var result = _libusb.libusb_bulk_transfer(
         _devHandle!,

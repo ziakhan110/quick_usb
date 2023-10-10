@@ -3,9 +3,7 @@ import 'dart:ffi';
 import 'dart:typed_data';
 import 'package:libusb/libusb.dart';
 
-const int _kMaxSmi64 = (1 << 62) - 1;
-const int _kMaxSmi32 = (1 << 30) - 1;
-final int _maxSize = sizeOf<IntPtr>() == 8 ? _kMaxSmi64 : _kMaxSmi32;
+const int _maxSize = 2048;
 
 extension LibusbExtension on Libusb {
   String describeError(int error) {
@@ -17,7 +15,7 @@ extension LibusbExtension on Libusb {
 }
 
 extension CharList on Pointer<Char> {
- Uint8List asTypedList(int size) {
+  Uint8List asTypedList(int size) {
     final data = Uint8List(size);
     for (var i = 0; i < size; i++) {
       data[i] = elementAt(i).value;

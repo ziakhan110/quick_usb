@@ -9,39 +9,25 @@ import 'package:quick_usb/src/common.dart';
 import 'quick_usb_platform_interface.dart';
 import 'utils.dart';
 
-late Libusb _libusb;
-
-class QuickUsbWindows extends _QuickUsbDesktop {
-  // For example/.dart_tool/flutter_build/generated_main.dart
-  static registerWith() {
-    QuickUsbPlatform.instance = QuickUsbMacos();
-    _libusb = Libusb(DynamicLibrary.open('libusb-1.0.23.dll'));
-  }
-}
-
-class QuickUsbMacos extends _QuickUsbDesktop {
-  // For example/.dart_tool/flutter_build/generated_main.dart
-  static registerWith() {
-    QuickUsbPlatform.instance = QuickUsbMacos();
-    if (Platform.version.contains('arm64')) {
-      _libusb = Libusb(DynamicLibrary.open('libusb-1.0.23_arm64.dylib'));
-    } else {
-      _libusb = Libusb(DynamicLibrary.open('libusb-1.0.23.dylib'));
-    }
-  }
-}
-
-class QuickUsbLinux extends _QuickUsbDesktop {
-  // For example/.dart_tool/flutter_build/generated_main.dart
-  static registerWith() {
-    QuickUsbPlatform.instance = QuickUsbLinux();
-    _libusb = Libusb(DynamicLibrary.open(
-        '${File(Platform.resolvedExecutable).parent.path}/lib/libusb-1.0.23.so'));
-  }
-}
-
-class _QuickUsbDesktop extends QuickUsbPlatform {
+class QuickUsbDesktop extends QuickUsbPlatform {
   Pointer<libusb_device_handle>? _devHandle;
+  static late Libusb _libusb;
+  static registerWith() {
+    QuickUsbPlatform.instance = QuickUsbDesktop();
+    _libusb = Libusb(loadLibrary());
+  }
+
+  static DynamicLibrary loadLibrary() {
+    final root = "${Directory.current.path}/assets/libusb";
+    if (Platform.isWindows) {
+      return DynamicLibrary.open('$root/libusb-1.0.dll');
+    } else if (Platform.isMacOS) {
+      return DynamicLibrary.open('$root/libusb-1.0.23_arm64.dylib');
+    } else if (Platform.isLinux) {
+      return DynamicLibrary.open('$root/libusb-1.0.so');
+    }
+    throw 'libusb dynamic library not found';
+  }
 
   @override
   Future<bool> init() async {
@@ -319,14 +305,14 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
 
   @override
   Future<int> bulkTransferOut(
-      UsbEndpoint endpoint, Uint8List data, int timemout) async {
+      UsbEndpoint endpoint, Uint8List data, int timeout) async {
     assert(_devHandle != null, 'Device not open');
     assert(endpoint.direction == UsbEndpoint.DIRECTION_OUT,
         'Endpoint\'s direction should be out');
 
     var actualLengthPtr = ffi.calloc<Int>();
     var dataPtr = ffi.calloc<UnsignedChar>(data.length);
-    for (var i = 0; i < actualLengthPtr.value; i++) {
+    for (var i = 0; i < data.length; i++) {
       dataPtr[i] = data[i];
     }
     try {
@@ -336,7 +322,7 @@ class _QuickUsbDesktop extends QuickUsbPlatform {
         dataPtr,
         data.length,
         actualLengthPtr,
-        timemout,
+        timeout,
       );
 
       if (result != libusb_error.LIBUSB_SUCCESS) {

@@ -69,10 +69,10 @@ packages:
     dependency: transitive
     description:
       name: ffi
-      sha256: "13a6ccf6a459a125b3fcdb6ec73bd5ff90822e071207c663bfd1f70062d51d18"
+      sha256: "7bf0adc28a23d395f19f3f1eb21dd7cfd1dd9f8e1c50051c069122e6853bc878"
       url: "https://pub.dev"
     source: hosted
-    version: "1.2.1"
+    version: "2.1.0"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -94,11 +94,12 @@ packages:
   libusb:
     dependency: transitive
     description:
-      name: libusb
-      sha256: ca24c95f475eb53fac4dcdcd754b5a0b1b04d0bbf744f61163ae5d59197471c6
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.23+2"
+      path: "."
+      ref: a770d1a3d16069fe7a84480e790a91f2e4ed6ae5
+      resolved-ref: a770d1a3d16069fe7a84480e790a91f2e4ed6ae5
+      url: "https://github.com/ziakhan110/libusb.dart"
+    source: git
+    version: "0.4.23-dev.1+1"
   lints:
     dependency: transitive
     description:
@@ -153,7 +154,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.4.0"
+    version: "0.5.0"
   sky_engine:
     dependency: transitive
     description: flutter
@@ -233,4 +234,4 @@ packages:
     version: "0.1.4-beta"
 sdks:
   dart: ">=3.1.0-185.0.dev <4.0.0"
-  flutter: ">=2.5.0"
+  flutter: ">=2.12.0"

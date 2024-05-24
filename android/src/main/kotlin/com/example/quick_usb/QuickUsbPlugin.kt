@@ -1,8 +1,10 @@
 package com.example.quick_usb
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Context.RECEIVER_NOT_EXPORTED
 import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbConfiguration
@@ -24,6 +26,9 @@ const val MAX_USBFS_BUFFER_SIZE = 16384
 
 
 private val pendingIntentFlag =
+    if (Build.VERSION.SDK_INT >= 34) {
+        PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT
+    }else
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     } else {
@@ -50,7 +55,18 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
         applicationContext = flutterPluginBinding.applicationContext
         usbManager = applicationContext?.getSystemService(Context.USB_SERVICE) as UsbManager
         val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
-        flutterPluginBinding.applicationContext.registerReceiver(usbDetachReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            flutterPluginBinding.applicationContext.registerReceiver(
+                usbDetachReceiver,
+                filter,
+                RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            flutterPluginBinding.applicationContext.registerReceiver(
+                usbDetachReceiver,
+                filter
+            )
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -111,10 +127,18 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                             )
                         }
                     }
-                    context.registerReceiver(
-                        permissionReceiver,
-                        IntentFilter(ACTION_USB_PERMISSION)
-                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.registerReceiver(
+                            permissionReceiver,
+                            IntentFilter(ACTION_USB_PERMISSION),
+                            RECEIVER_NOT_EXPORTED
+                        )
+                    } else {
+                        context.registerReceiver(
+                            permissionReceiver,
+                            IntentFilter(ACTION_USB_PERMISSION)
+                        )
+                    }
                     manager.requestPermission(device, pendingPermissionIntent(context))
                 } else {
                     result.success(
@@ -157,7 +181,15 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                             result.success(granted)
                         }
                     }
-                    context.registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.registerReceiver(
+                            receiver,
+                            IntentFilter(ACTION_USB_PERMISSION),
+                            RECEIVER_NOT_EXPORTED
+                        )
+                    } else {
+                        context.registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+                    }
                     manager.requestPermission(device, pendingPermissionIntent(context))
                 }
             }

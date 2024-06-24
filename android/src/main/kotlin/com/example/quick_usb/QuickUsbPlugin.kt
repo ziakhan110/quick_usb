@@ -1,8 +1,10 @@
 package com.example.quick_usb
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Context.RECEIVER_NOT_EXPORTED
 import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbConfiguration
@@ -24,6 +26,9 @@ const val MAX_USBFS_BUFFER_SIZE = 16384
 
 
 private val pendingIntentFlag =
+    if (Build.VERSION.SDK_INT >= 34) {
+        PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT
+    }else
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     } else {
@@ -50,7 +55,18 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
         applicationContext = flutterPluginBinding.applicationContext
         usbManager = applicationContext?.getSystemService(Context.USB_SERVICE) as UsbManager
         val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
-        flutterPluginBinding.applicationContext.registerReceiver(usbDetachReceiver, filter)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            flutterPluginBinding.applicationContext.registerReceiver(
+                usbDetachReceiver,
+                filter,
+                RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            flutterPluginBinding.applicationContext.registerReceiver(
+                usbDetachReceiver,
+                filter
+            )
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -63,7 +79,7 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
     private var usbDevice: UsbDevice? = null
     private var usbDeviceConnection: UsbDeviceConnection? = null
 
-    override fun onMethodCall( call: MethodCall,  result: Result) {
+    override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "getDeviceList" -> {
                 val manager =
@@ -111,10 +127,18 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                             )
                         }
                     }
-                    context.registerReceiver(
-                        permissionReceiver,
-                        IntentFilter(ACTION_USB_PERMISSION)
-                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.registerReceiver(
+                            permissionReceiver,
+                            IntentFilter(ACTION_USB_PERMISSION),
+                            RECEIVER_NOT_EXPORTED
+                        )
+                    } else {
+                        context.registerReceiver(
+                            permissionReceiver,
+                            IntentFilter(ACTION_USB_PERMISSION)
+                        )
+                    }
                     manager.requestPermission(device, pendingPermissionIntent(context))
                 } else {
                     result.success(
@@ -151,12 +175,21 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                     val receiver = object : BroadcastReceiver() {
                         override fun onReceive(context: Context, intent: Intent) {
                             context.unregisterReceiver(this)
-                                intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
-                            val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                            intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+                            val granted =
+                                intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
                             result.success(granted)
                         }
                     }
-                    context.registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.registerReceiver(
+                            receiver,
+                            IntentFilter(ACTION_USB_PERMISSION),
+                            RECEIVER_NOT_EXPORTED
+                        )
+                    } else {
+                        context.registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+                    }
                     manager.requestPermission(device, pendingPermissionIntent(context))
                 }
             }
@@ -257,41 +290,45 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
             }
 
             "bulkTransferOut" -> {
-                val device =
-                    usbDevice ?: return result.error("IllegalState", "usbDevice null", null)
-                val connection = usbDeviceConnection ?: return result.error(
-                    "IllegalState",
-                    "usbDeviceConnection null",
-                    null
-                )
-                val endpointMap = call.argument<Map<String, Any>>("endpoint")!!
-                val data = call.argument<ByteArray>("data")!!
-                val timeout = call.argument<Int>("timeout")!!
-                val endpoint =
-                    device.findEndpoint(
-                        endpointMap["endpointNumber"] as Int,
-                        endpointMap["direction"] as Int
+                try {
+                    val device =
+                        usbDevice ?: return result.error("IllegalState", "usbDevice null", null)
+                    val connection = usbDeviceConnection ?: return result.error(
+                        "IllegalState",
+                        "usbDeviceConnection null",
+                        null
                     )
+                    val endpointMap = call.argument<Map<String, Any>>("endpoint")!!
+                    val data = call.argument<ByteArray>("data")!!
+                    val timeout = call.argument<Int>("timeout")!!
+                    val endpoint =
+                        device.findEndpoint(
+                            endpointMap["endpointNumber"] as Int,
+                            endpointMap["direction"] as Int
+                        )
 
-                // TODO Check [UsbDeviceConnection.bulkTransfer] API >= 28
-                val dataSplit = data.asList()
-                    .windowed(
-                        MAX_USBFS_BUFFER_SIZE,
-                        MAX_USBFS_BUFFER_SIZE,
-                        true
-                    )
-                    .map { it.toByteArray() }
-                var sum: Int? = null
-                for (bytes in dataSplit) {
-                    val actualLength =
-                        connection.bulkTransfer(endpoint, bytes, bytes.count(), timeout)
-                    if (actualLength < 0) break
-                    sum = (sum ?: 0) + actualLength
-                }
-                if (sum == null) {
+                    // TODO Check [UsbDeviceConnection.bulkTransfer] API >= 28
+                    val dataSplit = data.asList()
+                        .windowed(
+                            MAX_USBFS_BUFFER_SIZE,
+                            MAX_USBFS_BUFFER_SIZE,
+                            true
+                        )
+                        .map { it.toByteArray() }
+                    var sum: Int? = null
+                    for (bytes in dataSplit) {
+                        val actualLength =
+                            connection.bulkTransfer(endpoint, bytes, bytes.count(), timeout)
+                        if (actualLength < 0) break
+                        sum = (sum ?: 0) + actualLength
+                    }
+                    if (sum == null) {
+                        result.error("unknown", "bulkTransferOut error", null)
+                    } else {
+                        result.success(sum)
+                    }
+                } catch (e: Exception) {
                     result.error("unknown", "bulkTransferOut error", null)
-                } else {
-                    result.success(sum)
                 }
             }
 

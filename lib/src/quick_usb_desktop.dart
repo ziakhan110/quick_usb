@@ -5,13 +5,14 @@ import 'package:ffi/ffi.dart' as ffi;
 import 'package:flutter/foundation.dart';
 import 'package:libusb/libusb.dart';
 import 'package:quick_usb/src/common.dart';
-
 import 'quick_usb_platform_interface.dart';
 import 'utils.dart';
 
 class QuickUsbDesktop extends QuickUsbPlatform {
   Pointer<libusb_device_handle>? _devHandle;
   static late Libusb _libusb;
+  bool _isPrinting = false;
+
   static registerWith() {
     QuickUsbPlatform.instance = QuickUsbDesktop();
     _libusb = Libusb(loadLibrary());
@@ -171,6 +172,7 @@ class QuickUsbDesktop extends QuickUsbPlatform {
 
   @override
   Future<void> closeDevice() async {
+    await _waitForPrintingToComplete();
     if (_devHandle != null) {
       _libusb.libusb_close(_devHandle!);
       _devHandle = null;
@@ -185,7 +187,7 @@ class QuickUsbDesktop extends QuickUsbPlatform {
     try {
       var device = _libusb.libusb_get_device(_devHandle!);
       var getConfigDesc =
-          _libusb.libusb_get_config_descriptor(device, index, configDescPtrPtr);
+      _libusb.libusb_get_config_descriptor(device, index, configDescPtrPtr);
       if (getConfigDesc != libusb_error.LIBUSB_SUCCESS) {
         throw 'getConfigDesc error: ${_libusb.describeError(getConfigDesc)}';
       }
@@ -195,7 +197,7 @@ class QuickUsbDesktop extends QuickUsbPlatform {
         id: configDescPtr.ref.bConfigurationValue,
         index: configDescPtr.ref.iConfiguration,
         interfaces: _iterateInterface(
-                configDescPtr.ref.interface1, configDescPtr.ref.bNumInterfaces)
+            configDescPtr.ref.interface1, configDescPtr.ref.bNumInterfaces)
             .toList(),
       );
       _libusb.libusb_free_config_descriptor(configDescPtr);
@@ -275,7 +277,7 @@ class QuickUsbDesktop extends QuickUsbPlatform {
       UsbEndpoint endpoint, int maxLength, int timeout) async {
     assert(_devHandle != null, 'Device not open');
     assert(endpoint.direction == UsbEndpoint.DIRECTION_IN,
-        'Endpoint\'s direction should be in');
+    'Endpoint\'s direction should be in');
 
     var actualLengthPtr = ffi.calloc<Int>();
     var dataPtr = ffi.calloc<UnsignedChar>(maxLength);
@@ -308,8 +310,9 @@ class QuickUsbDesktop extends QuickUsbPlatform {
       UsbEndpoint endpoint, Uint8List data, int timeout) async {
     assert(_devHandle != null, 'Device not open');
     assert(endpoint.direction == UsbEndpoint.DIRECTION_OUT,
-        'Endpoint\'s direction should be out');
+    'Endpoint\'s direction should be out');
 
+    _isPrinting = true;
     var actualLengthPtr = ffi.calloc<Int>();
     var dataPtr = ffi.calloc<UnsignedChar>(data.length);
     for (var i = 0; i < data.length; i++) {
@@ -333,6 +336,7 @@ class QuickUsbDesktop extends QuickUsbPlatform {
     } finally {
       ffi.calloc.free(actualLengthPtr);
       ffi.calloc.free(dataPtr);
+      _isPrinting = false;
     }
   }
 
@@ -341,6 +345,12 @@ class QuickUsbDesktop extends QuickUsbPlatform {
     assert(_devHandle != null, 'Device not open');
     if (Platform.isLinux) {
       _libusb.libusb_set_auto_detach_kernel_driver(_devHandle!, enable ? 1 : 0);
+    }
+  }
+
+  Future<void> _waitForPrintingToComplete() async {
+    while (_isPrinting) {
+      await Future.delayed(const Duration(milliseconds: 100));
     }
   }
 }

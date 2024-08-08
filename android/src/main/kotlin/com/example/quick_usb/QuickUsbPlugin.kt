@@ -1,6 +1,7 @@
 package com.example.quick_usb
 
 import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -20,16 +21,14 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 
-//android.hardware.usb.UsbRequest
+// android.hardware.usb.UsbRequest
 private const val ACTION_USB_PERMISSION = "com.example.quick_usb.USB_PERMISSION"
 const val MAX_USBFS_BUFFER_SIZE = 16384
-
 
 private val pendingIntentFlag =
     if (Build.VERSION.SDK_INT >= 34) {
         PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT
-    }else
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    }else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     } else {
         PendingIntent.FLAG_UPDATE_CURRENT
@@ -78,7 +77,10 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
 
     private var usbDevice: UsbDevice? = null
     private var usbDeviceConnection: UsbDeviceConnection? = null
+    private var isPrinting = false
 
+    @TargetApi(Build.VERSION_CODES.TIRAMISU)
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "getDeviceList" -> {
@@ -131,7 +133,6 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                         context.registerReceiver(
                             permissionReceiver,
                             IntentFilter(ACTION_USB_PERMISSION),
-                            RECEIVER_NOT_EXPORTED
                         )
                     } else {
                         context.registerReceiver(
@@ -204,10 +205,12 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
             }
 
             "closeDevice" -> {
-                usbDeviceConnection?.close()
-                usbDeviceConnection = null
-                usbDevice = null
-                result.success(null)
+                waitForPrintingToComplete {
+                    usbDeviceConnection?.close()
+                    usbDeviceConnection = null
+                    usbDevice = null
+                    result.success(null)
+                }
             }
 
             "getConfiguration" -> {
@@ -277,7 +280,6 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                     )
                 val timeout = call.argument<Int>("timeout")!!
 
-                // TODO Check [UsbDeviceConnection.bulkTransfer] API >= 28
                 require(maxLength <= MAX_USBFS_BUFFER_SIZE) { "Before 28, a value larger than 16384 bytes would be truncated down to 16384" }
                 val buffer = ByteArray(maxLength)
                 val actualLength =
@@ -291,6 +293,7 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
 
             "bulkTransferOut" -> {
                 try {
+                    isPrinting = true
                     val device =
                         usbDevice ?: return result.error("IllegalState", "usbDevice null", null)
                     val connection = usbDeviceConnection ?: return result.error(
@@ -307,7 +310,6 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                             endpointMap["direction"] as Int
                         )
 
-                    // TODO Check [UsbDeviceConnection.bulkTransfer] API >= 28
                     val dataSplit = data.asList()
                         .windowed(
                             MAX_USBFS_BUFFER_SIZE,
@@ -329,10 +331,26 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                     }
                 } catch (e: Exception) {
                     result.error("unknown", "bulkTransferOut error", null)
+                } finally {
+                    isPrinting = false
                 }
             }
 
             else -> result.notImplemented()
+        }
+    }
+
+    private fun waitForPrintingToComplete(action: () -> Unit) {
+        if (isPrinting) {
+            // Check every 100ms if printing is complete
+            Thread {
+                while (isPrinting) {
+                    Thread.sleep(100)
+                }
+                action()
+            }.start()
+        } else {
+            action()
         }
     }
 
@@ -352,7 +370,7 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
 }
 
 fun UsbDevice.findInterface(id: Int, alternateSetting: Int): UsbInterface? {
-    for (i in 0..interfaceCount) {
+    for (i in 0 until interfaceCount) {
         val usbInterface = getInterface(i)
         if (usbInterface.id == id && usbInterface.alternateSetting == alternateSetting) {
             return usbInterface
@@ -362,9 +380,9 @@ fun UsbDevice.findInterface(id: Int, alternateSetting: Int): UsbInterface? {
 }
 
 fun UsbDevice.findEndpoint(endpointNumber: Int, direction: Int): UsbEndpoint? {
-    for (i in 0..interfaceCount) {
+    for (i in 0 until interfaceCount) {
         val usbInterface = getInterface(i)
-        for (j in 0..usbInterface.endpointCount) {
+        for (j in 0 until usbInterface.endpointCount) {
             val endpoint = usbInterface.getEndpoint(j)
             if (endpoint.endpointNumber == endpointNumber && endpoint.direction == direction) {
                 return endpoint

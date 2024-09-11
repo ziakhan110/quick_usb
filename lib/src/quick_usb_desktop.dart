@@ -19,13 +19,12 @@ class QuickUsbDesktop extends QuickUsbPlatform {
   }
 
   static DynamicLibrary loadLibrary() {
-    final root = "${Directory.current.path}/assets/libusb";
     if (Platform.isWindows) {
-      return DynamicLibrary.open('$root/libusb-1.0.dll');
+      return DynamicLibrary.open('libusb-1.0.dll');
     } else if (Platform.isMacOS) {
-      return DynamicLibrary.open('$root/libusb-1.0.23_arm64.dylib');
+      return DynamicLibrary.open('libusb-1.0.23_arm64.dylib');
     } else if (Platform.isLinux) {
-      return DynamicLibrary.open('$root/libusb-1.0.so');
+      return DynamicLibrary.open('${File(Platform.resolvedExecutable).parent.path}/lib/libusb-1.0.23.so');
     }
     throw 'libusb dynamic library not found';
   }

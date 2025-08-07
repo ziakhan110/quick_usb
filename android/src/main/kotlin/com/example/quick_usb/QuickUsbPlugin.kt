@@ -133,6 +133,7 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                         context.registerReceiver(
                             permissionReceiver,
                             IntentFilter(ACTION_USB_PERMISSION),
+                            Context.RECEIVER_EXPORTED
                         )
                     } else {
                         context.registerReceiver(

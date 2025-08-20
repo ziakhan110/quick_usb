@@ -129,18 +129,11 @@ class QuickUsbPlugin : FlutterPlugin, MethodCallHandler {
                             )
                         }
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.registerReceiver(
-                            permissionReceiver,
-                            IntentFilter(ACTION_USB_PERMISSION),
-                            Context.RECEIVER_EXPORTED
-                        )
-                    } else {
-                        context.registerReceiver(
-                            permissionReceiver,
-                            IntentFilter(ACTION_USB_PERMISSION)
-                        )
-                    }
+                    context.registerReceiver(
+                        permissionReceiver,
+                        IntentFilter(ACTION_USB_PERMISSION),
+                        Context.RECEIVER_EXPORTED
+                    )
                     manager.requestPermission(device, pendingPermissionIntent(context))
                 } else {
                     result.success(
